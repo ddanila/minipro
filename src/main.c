@@ -1182,7 +1182,7 @@ int parse_options(minipro_handle_t *handle, int argc, char **argv)
 					return EXIT_FAILURE;
 				handle->device->pulse_delay = (uint16_t)v;
 			}
-			if (!strcasecmp(option, "address")) {
+			else if (!strcasecmp(option, "address")) {
 				handle->cmdopts->set_i2c_addr = 1;
 				if (!device->flags.can_adjust_address)
 					break;
