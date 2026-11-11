@@ -228,3 +228,14 @@ test-bench: rf2-mock
 	python3 tests/test-rf2-generated.py ./rf2-mock
 	$(CC) -g -ffunction-sections -fdata-sections -Isrc tests/test-t48-cache.c -Wl,--gc-sections -o test-t48-cache
 	./test-t48-cache
+
+test-pulse-option: $(VERSION_STRINGS) $(COMMON_OBJECTS) tests/test-pulse-option.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -Isrc tests/test-pulse-option.c $(COMMON_OBJECTS) $(LIBS) -o $@
+
+.PHONY: test-driver-fixes
+test-driver-fixes: test-pulse-option
+	./test-pulse-option
+	$(CC) -g -fsanitize=address -Isrc tests/test-prom-buffers.c src/bitbang.c -ffunction-sections -Wl,--gc-sections -o test-prom-buffers
+	./test-prom-buffers
+
+test-bench: test-driver-fixes

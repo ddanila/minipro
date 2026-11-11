@@ -21,3 +21,5 @@ debian/minipro.substvars
 /rf2-direct
 /rf2-mock
 /test-t48-cache
+/test-pulse-option
+/test-prom-buffers
