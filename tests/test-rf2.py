@@ -13,6 +13,7 @@ with tempfile.TemporaryDirectory() as tmp:
         ('incompatible', {'MOCK_INCOMPATIBLE': '1'}, 2048, 1, 0),
         ('verify-fail', {'MOCK_VERIFY_FAIL': '1'}, 2048, 1, 1),
         ('overvolt', {'MOCK_OVERVOLT': '1'}, 2048, 1, 0),
+        ('contact-fail', {'MOCK_CONTACT_FAIL': '1'}, 2048, 1, 0),
     ]:
         output = Path(tmp) / (name + '.bin')
         result = subprocess.run([exe, '--serial', '6MNNWV7B0LLRDYCAA5PF5744', 'write', image, str(output), str(limit)],

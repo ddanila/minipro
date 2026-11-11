@@ -17,7 +17,7 @@ static unsigned data(void){int d[]={9,10,11,13,14,15,16,17};unsigned v=0;for(int
 int clock_gettime(clockid_t id,struct timespec*t){(void)id;t->tv_sec=ticks;t->tv_nsec=(ticks-t->tv_sec)*1e9;return 0;}
 int nanosleep(const struct timespec*t,struct timespec*r){(void)r;ticks+=t->tv_sec+t->tv_nsec/1e9;return 0;}
 minipro_handle_t*minipro_open(uint8_t verbose){(void)verbose;memset(mem,255,sizeof mem);mem[0]=getenv("MOCK_INCOMPATIBLE")?0:0xc3;h.version=MP_T48;strcpy(h.serial_number,"6MNNWV7B0LLRDYCAA5PF5744");return &h;}
-void minipro_close(minipro_handle_t*x){(void)x;for(int i=0;i<56;i++)assert(!pwr[i].vcc&&!pwr[i].vpp&&!pwr[i].gnd);fprintf(stderr,"MOCK pulses=%d cleanup=OK\n",pulses);}
+void minipro_close(minipro_handle_t*x){(void)x;for(int i=0;i<56;i++)assert(!pwr[i].vcc&&!pwr[i].vpp&&!pwr[i].gnd);free(h.device);h.device=NULL;fprintf(stderr,"MOCK pulses=%d cleanup=OK\n",pulses);}
 int minipro_reset_state(minipro_handle_t*x){(void)x;memset(pwr,0,sizeof pwr);memset(pins,0,sizeof pins);return 0;}
 int minipro_set_zif_direction(minipro_handle_t*x,uint8_t*d){(void)x;memcpy(dirs,d,56);return 0;}
 int minipro_set_zif_state(minipro_handle_t*x,uint8_t*s){(void)x;
@@ -41,3 +41,5 @@ int minipro_get_zif_state(minipro_handle_t*x,uint8_t*s){(void)x;memcpy(s,pins,56
 int t48_set_vcc_voltagef(minipro_handle_t*x,float v,float t){(void)x;(void)t;vcc=v;return 0;}
 int t48_set_vpp_voltagef(minipro_handle_t*x,float v,float t){(void)x;(void)t;vpp=v;return 0;}
 int t48_measure_voltages(minipro_handle_t*x,float*v){(void)x;v[0]=getenv("MOCK_OVERVOLT")?26:vpp;v[1]=5;v[2]=vcc;v[3]=3.3;return 0;}
+
+int t48_pin_test(minipro_handle_t*x,pin_map_t*m){(void)x;assert(m->mask_count==24);return getenv("MOCK_CONTACT_FAIL")?1:0;}

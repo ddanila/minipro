@@ -73,6 +73,12 @@ int main(int argc,char **argv) {
  if(h->version!=MP_T48||strcmp(h->serial_number,expected_serial)) {
   fprintf(stderr,"ERROR: wrong programmer; no pin commands sent\n"); minipro_close(h);h=NULL;return 1;
  }
+ /* Diode contact preflight detects an empty/disconnected socket before power. */
+ h->device=calloc(1,sizeof(*h->device));if(!h->device)fail("allocate device");
+ h->device->package_details.pin_count=24;
+ pin_map_t map={0};map.gnd_count=1;map.gnd_table[0]=12;map.mask_count=24;
+ for(int i=0;i<24;i++)map.mask[i]=z(i+1)+1;
+ OK(t48_pin_test(h,&map));
  OK(minipro_reset_state(h)); configure(0,0,0); read_power(); rail_check(0);read_all(before);
  unsigned changed=0;
  if(writing) {

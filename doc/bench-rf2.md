@@ -15,7 +15,7 @@ For use without installation, build with `SHARE_INSTDIR="$PWD"`.
 ```
 
 RF2 support is explicit, fixed at the standard 2 KiB/24-pin pinout and nominal
-50 ms positive CE pulses. It checks existing contents, skips correct bytes,
+50 ms positive CE pulses. It checks socket contact before powering the chip, then existing contents, skips correct bytes,
 checks internal ADC voltages, verifies each byte, and stops at the first error.
 It never erases. Exit 3 means a requested byte limit left work incomplete.
 The serial is supplied by bench configuration; no device-specific serial is
