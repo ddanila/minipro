@@ -1372,7 +1372,8 @@ int t48_set_input_and_pulldown(minipro_handle_t *handle)
    */
 	uint8_t msg[48];
 	memset(last_direction, 0, sizeof(last_direction));
-	/* Set last_output to invalid value so we always change it if not set before */
+	/* Pull configuration releases outputs; restore every requested level. */
+	memset(last_output, 0xff, sizeof(last_output));
 	memset(msg, 0, sizeof(msg));
 	/* Reset pin drivers state */
 	msg[0] = T48_SET_PULLDOWNS;
