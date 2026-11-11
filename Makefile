@@ -215,3 +215,16 @@ endif
 
 
 .PHONY: all dist distclean clean install install-algorithm test version-info
+
+# Explicit experimental RF2 bench tool, never selected by the stock CLI.
+rf2-direct: $(VERSION_STRINGS) $(COMMON_OBJECTS) tools/rf2-direct.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -Isrc tools/rf2-direct.c $(COMMON_OBJECTS) $(LIBS) -o $@
+
+rf2-mock: tools/rf2-direct.c tests/mock-t48.c
+	$(CC) -g -Wall -Wextra -Werror -Isrc $^ -o $@
+
+.PHONY: test-bench
+test-bench: rf2-mock
+	python3 tests/test-rf2-generated.py ./rf2-mock
+	$(CC) -g -ffunction-sections -fdata-sections -Isrc tests/test-t48-cache.c -Wl,--gc-sections -o test-t48-cache
+	./test-t48-cache

@@ -17,3 +17,7 @@ debian/minipro.substvars
 # editor backups
 .*~
 *~
+
+/rf2-direct
+/rf2-mock
+/test-t48-cache

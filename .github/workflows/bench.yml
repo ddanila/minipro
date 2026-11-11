@@ -1,0 +1,9 @@
+name: Bench regression tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev zlib1g-dev
+      - run: make -j2 minipro rf2-direct test-bench SHARE_INSTDIR="$PWD"

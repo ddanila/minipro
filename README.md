@@ -1,4 +1,10 @@
 # minipro
+## Danila's bench branch
+
+This branch contains our reviewed fixes and experimental RF2 bench tool.
+See [build instructions, qualification and limitations](doc/bench-rf2.md).
+Shared workflows live in [rom-programmers](https://github.com/ddanila/rom-programmers).
+
 ## Latest "stable" version 0.7.4
 
 An open source program for controlling XGecu's series of chip programmers.

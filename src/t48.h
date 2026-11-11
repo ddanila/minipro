@@ -59,4 +59,8 @@ int t48_set_input_and_pulldown(minipro_handle_t *handle);
 int t48_hardware_check(minipro_handle_t *handle);
 int t48_pin_test(minipro_handle_t *handle, pin_map_t *map);
 
+/* Direct bench controls; pin vectors must contain 56 entries. */
+int t48_set_vcc_voltagef(minipro_handle_t *, float, float);
+int t48_set_vpp_voltagef(minipro_handle_t *, float, float);
+int t48_measure_voltages(minipro_handle_t *, float *);
 #endif
