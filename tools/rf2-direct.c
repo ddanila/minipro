@@ -17,7 +17,9 @@
 static minipro_handle_t *h;
 static uint8_t dir[56],state[56];
 static pin_driver_t power[56];
-static const int ap[]={8,7,6,5,4,3,2,1,23,22,19};
+static const int ap[]={8,7,6,5,4,3,2,1,23,22,19,21};
+static unsigned capacity=2048;
+static int address_bits=11;
 static const int dp[]={9,10,11,13,14,15,16,17};
 static volatile sig_atomic_t interrupted;
 static int z(int pin) { return (pin<=12 ? pin : pin+16)-1; }
@@ -30,10 +32,10 @@ static void fail(const char *s) {
 #define OK(x) do {if((x)) fail(#x);} while(0)
 static void delay(long ns) {struct timespec t={ns/1000000000,ns%1000000000}; while(nanosleep(&t,&t)) { if(errno!=EINTR) fail("nanosleep"); }}
 static double now(void) {struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t.tv_sec+t.tv_nsec/1e9;}
-static void address(unsigned a) { for(int i=0;i<11;i++) state[z(ap[i])]=(a>>i)&1; }
+static void address(unsigned a) { for(int i=0;i<address_bits;i++) state[z(ap[i])]=(a>>i)&1; }
 static void configure(int writing,unsigned a,uint8_t b) {
  memset(dir,MP_PIN_DIRECTION_IN,sizeof dir); memset(state,0,sizeof state);
- for(int i=0;i<11;i++) dir[z(ap[i])]=MP_PIN_DIRECTION_OUT;
+ for(int i=0;i<address_bits;i++) dir[z(ap[i])]=MP_PIN_DIRECTION_OUT;
  dir[z(18)]=dir[z(20)]=MP_PIN_DIRECTION_OUT;
  state[z(20)]=writing?1:0; /* OE high before data outputs enabled. */
  for(int i=0;i<8;i++) {dir[z(dp[i])]=writing?MP_PIN_DIRECTION_OUT:MP_PIN_DIRECTION_IN;state[z(dp[i])]=(b>>i)&1;}
@@ -49,7 +51,7 @@ static void read_power(void) {
  /* Disconnect VPP before connecting the same pin to VCC. */
  memset(power,0,sizeof power);power[z(12)].gnd=1;power[z(24)].vcc=1;
  OK(minipro_set_pin_drivers(h,power));
- power[z(21)].vcc=1; OK(minipro_set_pin_drivers(h,power));
+ if(capacity==2048) {power[z(21)].vcc=1; OK(minipro_set_pin_drivers(h,power));}
  OK(t48_set_vcc_voltagef(h,5.0,0.1)); delay(1000000);
  configure(0,0,0);
 }
@@ -57,16 +59,18 @@ static uint8_t read_byte(unsigned a) {
  uint8_t pins[56];address(a);OK(minipro_set_zif_state(h,state));delay(10000);
  OK(minipro_get_zif_state(h,pins));uint8_t b=0;for(int i=0;i<8;i++) b|=pins[z(dp[i])]<<i;return b;
 }
-static void read_all(uint8_t *b) {for(unsigned a=0;a<2048;a++){if(interrupted)fail("interrupted");b[a]=read_byte(a);}}
-static void save(const char *name,uint8_t *b) {FILE*f=fopen(name,"wb");if(!f)fail("open output");if(fwrite(b,1,2048,f)!=2048)fail("write output");if(fclose(f))fail("close output");}
+static void read_all(uint8_t *b) {for(unsigned a=0;a<capacity;a++){if(interrupted)fail("interrupted");b[a]=read_byte(a);}}
+static void save(const char *name,uint8_t *b) {FILE*f=fopen(name,"wb");if(!f)fail("open output");if(fwrite(b,1,capacity,f)!=capacity)fail("write output");if(fclose(f))fail("close output");}
 int main(int argc,char **argv) {
  if(argc<3 || strcmp(argv[1],"--serial") || !argv[2][0]) {
-  fprintf(stderr,"Required: --serial EXPECTED_T48_SERIAL read OUTPUT | write INPUT OUTPUT MAX_CHANGED_BYTES\n");return 2;
+  fprintf(stderr,"Required: --serial EXPECTED_T48_SERIAL read OUTPUT | read2732 OUTPUT | write INPUT OUTPUT MAX_CHANGED_BYTES\n");return 2;
  }
  const char *expected_serial=argv[2]; argc-=2; argv+=2;
  int writing=argc==5&&!strcmp(argv[1],"write");
- if(!writing && !(argc==3&&!strcmp(argv[1],"read"))) {fprintf(stderr,"Usage: rf2-direct read OUTPUT | write INPUT OUTPUT MAX_CHANGED_BYTES\n");return 2;}
- uint8_t target[2048],before[2048],after[2048];unsigned limit=0;
+ int reading2732=argc==3&&!strcmp(argv[1],"read2732");
+ if(reading2732) {capacity=4096;address_bits=12;}
+ if(!writing && !reading2732 && !(argc==3&&!strcmp(argv[1],"read"))) {fprintf(stderr,"Usage: rf2-direct read OUTPUT | read2732 OUTPUT | write INPUT OUTPUT MAX_CHANGED_BYTES\n");return 2;}
+ uint8_t target[2048],before[4096],after[4096];unsigned limit=0;
  if(writing) {char *end;long n=strtol(argv[4],&end,10);if(*end||n<1||n>2048)return 2;limit=n;FILE*f=fopen(argv[2],"rb");if(!f)return 2;if(fread(target,1,2048,f)!=2048||fgetc(f)!=EOF){fclose(f);return 2;}fclose(f);}
  signal(SIGINT,on_signal);signal(SIGTERM,on_signal);signal(SIGHUP,on_signal);
  h=minipro_open(1);if(!h)return 1;
@@ -76,6 +80,7 @@ int main(int argc,char **argv) {
  /* Diode contact preflight detects an empty/disconnected socket before power. */
  h->device=calloc(1,sizeof(*h->device));if(!h->device)fail("allocate device");
  h->device->package_details.pin_count=24;
+ h->device->code_memory_size=capacity;
  pin_map_t map={0};map.gnd_count=1;map.gnd_table[0]=12;map.mask_count=24;
  for(int i=0;i<24;i++)map.mask[i]=z(i+1)+1;
  OK(t48_pin_test(h,&map));

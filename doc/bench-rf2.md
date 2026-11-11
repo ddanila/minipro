@@ -35,3 +35,12 @@ setting qualified in that session, with a 23.5–25.5 V ADC guard.
 
 [Original evidence and provenance](https://github.com/ddanila/willem-v30/tree/ff2a7c3/programming/t48-rf2-w4-20261111).
 [Common workflows](https://github.com/ddanila/rom-programmers).
+
+## Read-only 2732
+
+`rf2-direct --serial EXPECTED_SERIAL read2732 OUTPUT` reuses the low-level read
+controls for a standard DIP24 2732. It reads 4096 bytes with A11 on pin 21;
+only pin 24 is connected to VCC, and OE/VPP pin 20 is driven low. No high-voltage
+pin route or programming operation is enabled. The existing `write` command
+remains RF2-only and requires an exact 2048-byte image. The test double checks
+all 12 address bits, pin-21 routing and zero programming pulses.
