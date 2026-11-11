@@ -186,9 +186,9 @@ static mask_prom_t mask_prom_table[] = {
 };
 
 /* Persistent state */
-static uint8_t zif_dir[40];
-static uint8_t zif_state[40];
-static pin_driver_t pin_drivers[40];
+static uint8_t zif_dir[56];
+static uint8_t zif_state[56];
+static pin_driver_t pin_drivers[56];
 
 /* Set the initial state */
 static int mask_prom_init(minipro_handle_t *handle)
@@ -320,7 +320,7 @@ static int is_empty(uint8_t *buffer, size_t length)
 /* Read bytes from Hitachi mask PROMs */
 static int prom_read_mask_prom(minipro_handle_t *handle, uint32_t address,
 	                uint8_t *buffer, size_t length) {
-	static uint8_t zif[40];
+	static uint8_t zif[56];
 	uint8_t type = (uint8_t)handle->device->variant & ~HITACHI_MASK_PROM_MASK;
 	uint8_t pin_count = handle->device->package_details.pin_count;
 	uint8_t ce_pin_count = strlen((const char *) mask_prom_table[type].ce_pins);
@@ -387,7 +387,7 @@ int prom_read(minipro_handle_t *handle, uint32_t address, uint8_t *buffer,
 	if ((uint8_t)handle->device->variant & HITACHI_MASK_PROM_MASK)
 		return prom_read_mask_prom(handle, address, buffer, lenght);
 
-	static uint8_t zif[40];
+	static uint8_t zif[56];
 	uint8_t type = (uint8_t)handle->device->variant;
 	uint8_t pin_count = handle->device->package_details.pin_count;
 
