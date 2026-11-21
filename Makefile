@@ -223,10 +223,17 @@ rf2-direct: $(VERSION_STRINGS) $(COMMON_OBJECTS) tools/rf2-direct.c
 rf2-mock: tools/rf2-direct.c tests/mock-t48.c
 	$(CC) -g -Wall -Wextra -Werror -Isrc $^ -o $@
 
+ifeq ($(shell uname -s),Darwin)
+BENCH_GC_FLAGS = -Wl,-dead_strip
+else
+BENCH_GC_FLAGS = -Wl,--gc-sections
+endif
+
 .PHONY: test-bench
 test-bench: rf2-mock
 	python3 tests/test-rf2-generated.py ./rf2-mock
-	$(CC) -g -ffunction-sections -fdata-sections -Isrc tests/test-t48-cache.c -Wl,--gc-sections -o test-t48-cache
+	python3 tests/test-rf2-a9.py ./rf2-mock
+	$(CC) -g -ffunction-sections -fdata-sections -Isrc tests/test-t48-cache.c $(BENCH_GC_FLAGS) -o test-t48-cache
 	./test-t48-cache
 
 test-pulse-option: $(VERSION_STRINGS) $(COMMON_OBJECTS) tests/test-pulse-option.c
@@ -235,7 +242,7 @@ test-pulse-option: $(VERSION_STRINGS) $(COMMON_OBJECTS) tests/test-pulse-option.
 .PHONY: test-driver-fixes
 test-driver-fixes: test-pulse-option
 	./test-pulse-option
-	$(CC) -g -fsanitize=address -Isrc tests/test-prom-buffers.c src/bitbang.c -ffunction-sections -Wl,--gc-sections -o test-prom-buffers
+	$(CC) -g -fsanitize=address -Isrc tests/test-prom-buffers.c src/bitbang.c -ffunction-sections $(BENCH_GC_FLAGS) -o test-prom-buffers
 	./test-prom-buffers
 
 test-bench: test-driver-fixes

@@ -18,7 +18,8 @@ static minipro_handle_t *h;
 static uint8_t dir[56],state[56];
 static pin_driver_t power[56];
 static const int ap[]={8,7,6,5,4,3,2,1,23,22,19,21};
-static unsigned capacity=2048;
+static int rf2=1;
+static int routed_a9=-1; static unsigned capacity=2048;
 static int address_bits=11;
 static const int dp[]={9,10,11,13,14,15,16,17};
 static volatile sig_atomic_t interrupted;
@@ -33,13 +34,29 @@ static void fail(const char *s) {
 static void delay(long ns) {struct timespec t={ns/1000000000,ns%1000000000}; while(nanosleep(&t,&t)) { if(errno!=EINTR) fail("nanosleep"); }}
 static double now(void) {struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t.tv_sec+t.tv_nsec/1e9;}
 static void address(unsigned a) { for(int i=0;i<address_bits;i++) state[z(ap[i])]=(a>>i)&1; }
+/* RF2 specimens can alias A9 despite digital feedback reading high.
+ * Disable its digital driver; use the 5.18 V requested VCC rail instead.
+ * Never overlap VCC/GND routes, and gate OE during each route transition.
+ * Read-only 2716/2732 retain their original digital addressing and 5 V supply.
+ */
+static void route_a9(unsigned a) {
+ if(!rf2)return;
+ int high=(a>>9)&1;if(routed_a9==high)return;
+ uint8_t oe=state[z(20)];state[z(20)]=1;OK(minipro_set_zif_state(h,state));
+ power[z(22)].vcc=0;power[z(22)].gnd=0;OK(minipro_set_pin_drivers(h,power));
+ power[z(22)].vcc=high;power[z(22)].gnd=!high;OK(minipro_set_pin_drivers(h,power));
+ routed_a9=high;delay(1000000);
+ state[z(20)]=oe;OK(minipro_set_zif_state(h,state));
+}
 static void configure(int writing,unsigned a,uint8_t b) {
  memset(dir,MP_PIN_DIRECTION_IN,sizeof dir); memset(state,0,sizeof state);
  for(int i=0;i<address_bits;i++) dir[z(ap[i])]=MP_PIN_DIRECTION_OUT;
  dir[z(18)]=dir[z(20)]=MP_PIN_DIRECTION_OUT;
  state[z(20)]=writing?1:0; /* OE high before data outputs enabled. */
  for(int i=0;i<8;i++) {dir[z(dp[i])]=writing?MP_PIN_DIRECTION_OUT:MP_PIN_DIRECTION_IN;state[z(dp[i])]=(b>>i)&1;}
+ if(rf2) dir[z(22)]=MP_PIN_DIRECTION_IN;
  address(a); OK(minipro_set_zif_direction(h,dir)); OK(minipro_set_zif_state(h,state));
+ if(writing) route_a9(a);
 }
 static void rail_check(int programming) {
  float v[4];OK(t48_measure_voltages(h,v));
@@ -49,28 +66,31 @@ static void rail_check(int programming) {
 }
 static void read_power(void) {
  /* Disconnect VPP before connecting the same pin to VCC. */
- memset(power,0,sizeof power);power[z(12)].gnd=1;power[z(24)].vcc=1;
+ routed_a9=-1;memset(power,0,sizeof power);power[z(12)].gnd=1;power[z(24)].vcc=1;
  OK(minipro_set_pin_drivers(h,power));
  if(capacity==2048) {power[z(21)].vcc=1; OK(minipro_set_pin_drivers(h,power));}
- OK(t48_set_vcc_voltagef(h,5.0,0.1)); delay(1000000);
+ OK(t48_set_vcc_voltagef(h,rf2?5.18:5.0,rf2?0.01:0.1)); delay(1000000);
  configure(0,0,0);
+
 }
 static uint8_t read_byte(unsigned a) {
- uint8_t pins[56];address(a);OK(minipro_set_zif_state(h,state));delay(10000);
+ uint8_t pins[56];route_a9(a);address(a);OK(minipro_set_zif_state(h,state));delay(10000);
  OK(minipro_get_zif_state(h,pins));uint8_t b=0;for(int i=0;i<8;i++) b|=pins[z(dp[i])]<<i;return b;
 }
 static void read_all(uint8_t *b) {for(unsigned a=0;a<capacity;a++){if(interrupted)fail("interrupted");b[a]=read_byte(a);}}
 static void save(const char *name,uint8_t *b) {FILE*f=fopen(name,"wb");if(!f)fail("open output");if(fwrite(b,1,capacity,f)!=capacity)fail("write output");if(fclose(f))fail("close output");}
 int main(int argc,char **argv) {
  if(argc<3 || strcmp(argv[1],"--serial") || !argv[2][0]) {
-  fprintf(stderr,"Required: --serial EXPECTED_T48_SERIAL read OUTPUT | read2732 OUTPUT | write INPUT OUTPUT MAX_CHANGED_BYTES\n");return 2;
+  fprintf(stderr,"Required: --serial EXPECTED_T48_SERIAL read OUTPUT | read2716 OUTPUT | read2732 OUTPUT | write INPUT OUTPUT MAX_CHANGED_BYTES\n");return 2;
  }
  const char *expected_serial=argv[2]; argc-=2; argv+=2;
  int writing=argc==5&&!strcmp(argv[1],"write");
+ int reading2716=argc==3&&!strcmp(argv[1],"read2716");
  int reading2732=argc==3&&!strcmp(argv[1],"read2732");
+ rf2=!reading2716&&!reading2732;
  if(reading2732) {capacity=4096;address_bits=12;}
- if(!writing && !reading2732 && !(argc==3&&!strcmp(argv[1],"read"))) {fprintf(stderr,"Usage: rf2-direct read OUTPUT | read2732 OUTPUT | write INPUT OUTPUT MAX_CHANGED_BYTES\n");return 2;}
- uint8_t target[2048],before[4096],after[4096];unsigned limit=0;
+ if(!writing && !reading2716 && !reading2732 && !(argc==3&&!strcmp(argv[1],"read"))) {fprintf(stderr,"Usage: rf2-direct read OUTPUT | read2716 OUTPUT | read2732 OUTPUT | write INPUT OUTPUT MAX_CHANGED_BYTES\n");return 2;}
+ uint8_t target[2048],expected[2048],before[4096],after[4096];unsigned limit=0;
  if(writing) {char *end;long n=strtol(argv[4],&end,10);if(*end||n<1||n>2048)return 2;limit=n;FILE*f=fopen(argv[2],"rb");if(!f)return 2;if(fread(target,1,2048,f)!=2048||fgetc(f)!=EOF){fclose(f);return 2;}fclose(f);}
  signal(SIGINT,on_signal);signal(SIGTERM,on_signal);signal(SIGHUP,on_signal);
  h=minipro_open(1);if(!h)return 1;
@@ -87,23 +107,44 @@ int main(int argc,char **argv) {
  OK(minipro_reset_state(h)); configure(0,0,0); read_power(); rail_check(0);read_all(before);
  unsigned changed=0;
  if(writing) {
+  read_all(after);
+  if(memcmp(before,after,2048)) fail("initial reads unstable; no pulse");
+  memcpy(expected,before,2048);
+ }
+
+ if(writing) {
   for(unsigned a=0;a<2048;a++)if((before[a]&target[a])!=target[a])fail("target needs UV erase");
   for(unsigned a=0;a<2048&&changed<limit;a++) {
    if(before[a]==target[a])continue;
    if(interrupted)fail("interrupted");
    /* Disable outputs before driving the data bus. VPP is still at read voltage. */
-   state[z(20)]=1;OK(minipro_set_zif_state(h,state));configure(1,a,target[a]);
+   state[z(20)]=1;OK(minipro_set_zif_state(h,state));configure(1,a,target[a]);delay(2000000);
    /* Disconnect read VPP=VCC, set generator, then connect programming VPP. */
    power[z(21)].vcc=0;OK(minipro_set_pin_drivers(h,power));
    OK(t48_set_vpp_voltagef(h,24.37,0.1));
    power[z(21)].vpp=1;OK(minipro_set_pin_drivers(h,power));
-   OK(t48_set_vcc_voltagef(h,5.0,0.1));delay(2000000);
+   OK(t48_set_vcc_voltagef(h,rf2?5.18:5.0,rf2?0.01:0.1));delay(2000000);
    rail_check(1);if(interrupted)fail("interrupted before pulse");
    state[z(18)]=1;double start=now();OK(minipro_set_zif_state(h,state));
    delay(50000000);state[z(18)]=0;OK(minipro_set_zif_state(h,state));double ms=(now()-start)*1000;
    delay(100000);read_power();uint8_t got=read_byte(a);
    fprintf(stderr,"%04x old=%02x want=%02x got=%02x host-pulse-window=%.3fms\n",a,before[a],target[a],got,ms);
-   if(got!=target[a])fail("byte verification mismatch; no retry");
+   expected[a]=target[a];
+   if(got!=target[a]) {
+    read_all(after);OK(minipro_reset_state(h));save(argv[3],after);
+    fail("byte verification mismatch; no retry");
+   }
+   /* A matching current byte alone can hide an address alias. */
+   if(changed==0) {
+    read_all(after);
+    if(memcmp(expected,after,2048)) {
+     OK(minipro_reset_state(h));save(argv[3],after);
+     fail("first-pulse full-chip verification mismatch; no retry");
+    }
+   } else if(read_byte(a^0x200)!=expected[a^0x200]) {
+    read_all(after);OK(minipro_reset_state(h));save(argv[3],after);
+    fail("A9 partner changed; no retry");
+   }
    changed++;
   }
  }

@@ -44,3 +44,33 @@ only pin 24 is connected to VCC, and OE/VPP pin 20 is driven low. No high-voltag
 pin route or programming operation is enabled. The existing `write` command
 remains RF2-only and requires an exact 2048-byte image. The test double checks
 all 12 address bits, pin-21 routing and zero programming pulses.
+
+## RF2 A9 drive and supply workaround
+
+The `read` and `write` commands now enable the RF2 workaround by default:
+release the normal A9 digital driver (DIP24 pin 22 / T48 ZIF38), route A9
+through the VCC/GND matrix with break-before-make switching and OE gating,
+and request VCC=5.18 V. Keep VCCIO at its default and read pin 21 on VCC.
+The internal ADC must still report VCC within 4.75–5.25 V. Two A9-marked RF2
+specimens passed independent partner writes with measured VCC around 5.09 V
+reading and 5.14 V programming. This is not a measured silicon threshold.
+
+Before writing, two full initial reads must agree. After the first pulse the
+entire chip must match the tracked partial image, not just the current byte.
+Every subsequent pulse also checks its A9 partner before proceeding. Failure
+stops without retry and preserves the full readback after switching outputs
+off; final verification and the caller's fresh reads are still required.
+A blank image cannot establish address independence before a pulse.
+
+`read2716 OUTPUT` preserves the old explicit 5 V digital-address read path for
+standard single-supply 2716s; `read2732` is unchanged. Neither enables this RF2
+workaround or permits programming. The standard MiniPro CLI is unchanged.
+
+`make test-bench` exercises the actual writer with host-only injected A9 margin
+and address-alias faults, a nonperiodic full image, partial writes, first-pulse
+and later-partner corruption, unstable initial reads and fail-safe shutdown.
+The model is explanatory, not an analog simulation. Full-image physical RF2
+programming, retention and mainboard operation remain unqualified with this
+new algorithm. Prior full-image burns used the earlier driver.
+
+[Both specimens and detailed bench evidence](https://github.com/ddanila/rom-programmers/blob/main/docs/rf2-a9-investigation.md).
