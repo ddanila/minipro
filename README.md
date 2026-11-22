@@ -1,7 +1,11 @@
 # minipro
 ## Danila's bench branch
 
-This branch contains our reviewed fixes and experimental RF2 bench tool.
+This branch (`bench`) contains our reviewed fixes and experimental RF2 bench tool.
+It is the default branch for our development. `master` tracks the immediate
+upstream, [whaslbeck/minipro](https://github.com/whaslbeck/minipro), without
+our custom commits. Sync `master` by fast-forwarding from that upstream, then
+merge it into `bench` as needed. Push our changes only to `bench`.
 See [build instructions, qualification and limitations](doc/bench-rf2.md).
 Shared workflows live in [rom-programmers](https://github.com/ddanila/rom-programmers).
 
